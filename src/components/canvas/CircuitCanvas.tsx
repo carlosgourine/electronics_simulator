@@ -10,7 +10,7 @@ type CircuitCanvasProps = {
   wires: Wire[];
   selected: Selection;
   analysis: Analysis;
-  termIndex: Map<string, Terminal>;
+  terminalMap: Map<string, Terminal>;
   pendingWire: { aTerm: string } | null;
   hoverTerm: Terminal | null;
   showNodes: boolean;
@@ -30,7 +30,7 @@ export function CircuitCanvas({
   wires,
   selected,
   analysis,
-  termIndex,
+  terminalMap,
   pendingWire,
   hoverTerm,
   showNodes,
@@ -61,8 +61,8 @@ export function CircuitCanvas({
       <rect x="0" y="0" width="100%" height="100%" fill="url(#grid)" />
 
       {wires.map((wire) => {
-        const a = termIndex.get(wire.aTerm);
-        const b = termIndex.get(wire.bTerm);
+        const a = terminalMap.get(wire.aTerm);
+        const b = terminalMap.get(wire.bTerm);
         if (!a || !b) return null;
 
         const isSelected = selected.kind === "wire" && selected.id === wire.id;
@@ -74,7 +74,7 @@ export function CircuitCanvas({
       })}
 
       {pendingWire && hoverTerm && (() => {
-        const a = termIndex.get(pendingWire.aTerm);
+        const a = terminalMap.get(pendingWire.aTerm);
         if (!a) return null;
         return <line x1={a.x} y1={a.y} x2={hoverTerm.x} y2={hoverTerm.y} stroke="#ffd60a" strokeDasharray="6 4" strokeWidth={2} />;
       })()}
@@ -95,7 +95,7 @@ export function CircuitCanvas({
       {hoverTerm && <circle cx={hoverTerm.x} cy={hoverTerm.y} r={6} fill="#ffd60a" opacity={0.8} />}
 
       {showNodes &&
-        Array.from(termIndex.values()).map((terminal) => {
+        Array.from(terminalMap.values()).map((terminal) => {
           const nodeId = sol.nodeOf.get(terminal.id);
           if (nodeId === undefined) return null;
 

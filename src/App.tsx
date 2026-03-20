@@ -13,15 +13,15 @@ import {
 } from "./engine/measurements";
 import { solveAC } from "./engine/solveAC";
 import { solveDC } from "./engine/solveDC";
+import { useCircuit } from "./hooks/useCircuit";
 import { useDraggable } from "./hooks/useDraggable";
 import { useKey } from "./hooks/useKey";
 import { useTimeStore } from "./store/useTimeStore";
-import type { Analysis, Entity, EntityType, PhasorMode, Selection, Terminal, Tool, Wire } from "./types";
+import type { Analysis, Entity, EntityType, PhasorMode, Terminal, Tool, Wire } from "./types";
 import { ANALYSIS, ENTITY_TYPE, TOOL } from "./types";
-import { createEntity, niceId, worldTerminals } from "./utils/entities";
+import { worldTerminals } from "./utils/entities";
 import { hitTerminal, snap } from "./utils/geometry";
 import { parseHz, parseSI } from "./utils/parser";
-import { nearestFree } from "./utils/placement";
 
 function getMouse(svg: SVGSVGElement, event: React.MouseEvent | MouseEvent) {
   const rect = svg.getBoundingClientRect();
@@ -33,9 +33,19 @@ function getMouse(svg: SVGSVGElement, event: React.MouseEvent | MouseEvent) {
 
 export default function App() {
   const [tool, setTool] = useState<Tool>(TOOL.SELECT);
-  const [entities, setEntities] = useState<Entity[]>([]);
-  const [wires, setWires] = useState<Wire[]>([]);
-  const [selected, setSelected] = useState<Selection>({ kind: null, id: null });
+  const {
+    entities,
+    wires,
+    selected,
+    setSelected,
+    addEntity,
+    addWire,
+    updateEntity,
+    moveEntity,
+    snapEntityToGrid,
+    deleteEntity: deleteCircuitEntity,
+    deleteWire,
+  } = useCircuit();
   const [pendingWire, setPendingWire] = useState<{ aTerm: string } | null>(null);
   const [hoverTerm, setHoverTerm] = useState<Terminal | null>(null);
   const [showNodes, setShowNodes] = useState(false);
@@ -56,7 +66,7 @@ export default function App() {
 
   const selectedEntity = entities.find((entity) => selected.kind === "entity" && entity.id === selected.id) || null;
 
-  const termIndex = useMemo(() => {
+  const terminalMap = useMemo(() => {
     const map = new Map<string, Terminal>();
     entities.forEach((entity) => {
       worldTerminals(entity).forEach((terminal) => map.set(terminal.id, terminal));
@@ -90,31 +100,14 @@ export default function App() {
   }, [running, tick]);
 
   function deleteEntity(entityId: string) {
-    setEntities((current) => current.filter((entity) => entity.id !== entityId));
-    setWires((current) => current.filter((wire) => !wire.aTerm.startsWith(`${entityId}:`) && !wire.bTerm.startsWith(`${entityId}:`)));
+    deleteCircuitEntity(entityId);
     if (meterViewId === entityId) setMeterViewId(null);
     if ((probeData?.type === "i-entity" || probeData?.type === "v-entity") && probeData.id === entityId) setProbeData(null);
-    setSelected({ kind: null, id: null });
-  }
-
-  function deleteWire(wireId: string) {
-    setWires((current) => current.filter((wire) => wire.id !== wireId));
-    setSelected({ kind: null, id: null });
   }
 
   function rotateSelectedEntity() {
     if (!selectedEntity) return;
-    setEntities((current) =>
-      current.map((entity) =>
-        entity.id === selectedEntity.id ? { ...entity, rotation: ((entity.rotation || 0) + 90) % 360 } : entity,
-      ),
-    );
-  }
-
-  function openSelectedMeter() {
-    if (!selectedEntity) return;
-    if (selectedEntity.type !== ENTITY_TYPE.VMETER && selectedEntity.type !== ENTITY_TYPE.AMETER) return;
-    setMeterViewId(selectedEntity.id);
+    updateEntity(selectedEntity.id, { rotation: ((selectedEntity.rotation || 0) + 90) % 360 });
   }
 
   useKey((event) => {
@@ -130,7 +123,9 @@ export default function App() {
         rotateSelectedEntity();
         break;
       case "enter":
-        openSelectedMeter();
+        if (selectedEntity && (selectedEntity.type === ENTITY_TYPE.VMETER || selectedEntity.type === ENTITY_TYPE.AMETER)) {
+          setMeterViewId(selectedEntity.id);
+        }
         break;
       case "p":
         if (analysis !== ANALYSIS.AC) break;
@@ -153,14 +148,9 @@ export default function App() {
     }
   });
 
-  function addEntity(type: EntityType, x: number, y: number) {
-    const entity = createEntity(type, entities, x, y);
-    setEntities((current) => current.concat({ ...entity, ...nearestFree(entity.x, entity.y, current) }));
-  }
-
   function updateSelected(patch: Partial<Entity>) {
     if (!selectedEntity) return;
-    setEntities((current) => current.map((entity) => (entity.id === selectedEntity.id ? { ...entity, ...patch } : entity)));
+    updateEntity(selectedEntity.id, patch);
   }
 
   function onCanvasClick(event: React.MouseEvent<SVGSVGElement>) {
@@ -189,12 +179,7 @@ export default function App() {
       if (!pendingWire) {
         setPendingWire({ aTerm: hoverTerm.id });
       } else if (hoverTerm.id !== pendingWire.aTerm) {
-        const exists = wires.some(
-          (wire) =>
-            (wire.aTerm === pendingWire.aTerm && wire.bTerm === hoverTerm.id) ||
-            (wire.bTerm === pendingWire.aTerm && wire.aTerm === hoverTerm.id),
-        );
-        if (!exists) setWires((current) => current.concat({ id: niceId(), aTerm: pendingWire.aTerm, bTerm: hoverTerm.id }));
+        addWire(pendingWire.aTerm, hoverTerm.id);
         setPendingWire(null);
       }
       return;
@@ -213,20 +198,8 @@ export default function App() {
     const svg = svgRef.current;
     if (!svg) return;
     const point = getMouse(svg, event);
-    setHoverTerm(hitTerminal(termIndex.values(), point.x, point.y));
+    setHoverTerm(hitTerminal(terminalMap.values(), point.x, point.y));
   }
-
-  const moveEntity = (entityId: string, x: number, y: number) => {
-    setEntities((current) => current.map((entity) => (entity.id === entityId ? { ...entity, x, y } : entity)));
-  };
-
-  const finishDrag = (entityId: string) => {
-    setEntities((current) =>
-      current.map((entity) =>
-        entity.id === entityId ? { ...entity, ...nearestFree(entity.x, entity.y, current, entityId) } : entity,
-      ),
-    );
-  };
 
   const startDrag = useDraggable({
     getMouseCoord: (event) => {
@@ -234,7 +207,7 @@ export default function App() {
       return svg ? getMouse(svg, event) : { x: 0, y: 0 };
     },
     moveEntity,
-    finishDrag,
+    finishDrag: snapEntityToGrid,
     onDragStart: (entity) => {
       setTool(TOOL.SELECT);
       setSelected({ kind: "entity", id: entity.id });
@@ -300,7 +273,7 @@ export default function App() {
             wires={wires}
             selected={selected}
             analysis={analysis}
-            termIndex={termIndex}
+            terminalMap={terminalMap}
             pendingWire={pendingWire}
             hoverTerm={hoverTerm}
             showNodes={showNodes}
@@ -352,12 +325,7 @@ export default function App() {
                 return;
               }
               if (terminal.id === pendingWire.aTerm) return;
-              const exists = wires.some(
-                (wire) =>
-                  (wire.aTerm === pendingWire.aTerm && wire.bTerm === terminal.id) ||
-                  (wire.bTerm === pendingWire.aTerm && wire.aTerm === terminal.id),
-              );
-              if (!exists) setWires((current) => current.concat({ id: niceId(), aTerm: pendingWire.aTerm, bTerm: terminal.id }));
+              addWire(pendingWire.aTerm, terminal.id);
               setPendingWire(null);
             }}
           />

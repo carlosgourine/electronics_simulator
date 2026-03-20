@@ -1,19 +1,5 @@
 export type Wave = "dc" | "ac";
 
-export type EntityType =
-  | "ground"
-  | "resistor"
-  | "capacitor"
-  | "inductor"
-  | "vsrc"
-  | "isrc"
-  | "vmeter"
-  | "ameter";
-
-export type Tool = EntityType | "select" | "probe-v" | "probe-i";
-export type Analysis = "dc" | "ac";
-export type PhasorMode = "components" | "nodeGround" | "nodePairs";
-
 export const ENTITY_TYPE = {
   GROUND: "ground",
   RESISTOR: "resistor",
@@ -35,6 +21,11 @@ export const ANALYSIS = {
   DC: "dc",
   AC: "ac",
 } as const;
+
+export type EntityType = (typeof ENTITY_TYPE)[keyof typeof ENTITY_TYPE];
+export type Tool = (typeof TOOL)[keyof typeof TOOL] | EntityType;
+export type Analysis = (typeof ANALYSIS)[keyof typeof ANALYSIS];
+export type PhasorMode = "components" | "nodeGround" | "nodePairs";
 
 export type Entity = {
   id: string;

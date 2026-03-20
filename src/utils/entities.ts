@@ -2,7 +2,7 @@ import { DEFAULTS, TYPE_PREFIX } from "../constants/config";
 import type { Entity, EntityType, Terminal } from "../types";
 import { rotatePoint, snap } from "./geometry";
 
-export function niceId() {
+export function createId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
@@ -18,7 +18,7 @@ export function worldTerminals(entity: Entity): Terminal[] {
   return terminalsFor(entity.type).map((terminal) => {
     const point = rotatePoint(terminal.x, terminal.y, entity.rotation || 0);
     return {
-      id: `${entity.id}:${terminal.key}`,
+    id: `${entity.id}:${terminal.key}`,
       x: entity.x + point.x,
       y: entity.y + point.y,
       key: terminal.key,
@@ -36,7 +36,7 @@ export function nextLabel(entities: Entity[], type: EntityType) {
 
 export function createEntity(type: EntityType, entities: Entity[], x: number, y: number): Entity {
   return {
-    id: niceId(),
+    id: createId(),
     type,
     x: snap(x),
     y: snap(y),
