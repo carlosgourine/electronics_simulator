@@ -1,21 +1,14 @@
 import { PALETTE } from "../../constants/config";
+import { useUIStore } from "../../store/useUIStore";
 import type { Analysis, Entity, Solution, Tool } from "../../types";
 import { ANALYSIS, TOOL } from "../../types";
 import { Editor } from "./Editor";
 import { ResultsPanel } from "./ResultsPanel";
 
 type SidebarProps = {
-  tool: Tool;
-  setTool: (tool: Tool) => void;
-  analysis: Analysis;
-  setAnalysis: (analysis: Analysis) => void;
-  acFreq: string;
-  setAcFreq: (freq: string) => void;
   running: boolean;
   onToggleRunning: () => void;
   setPhasorOpen: (open: boolean) => void;
-  showNodes: boolean;
-  setShowNodes: (show: boolean) => void;
   selectedEntity: Entity | null;
   updateSelected: (patch: Partial<Entity>) => void;
   sol: Solution;
@@ -23,22 +16,23 @@ type SidebarProps = {
 };
 
 export function Sidebar({
-  tool,
-  setTool,
-  analysis,
-  setAnalysis,
-  acFreq,
-  setAcFreq,
   running,
   onToggleRunning,
   setPhasorOpen,
-  showNodes,
-  setShowNodes,
   selectedEntity,
   updateSelected,
   sol,
   omegaText,
 }: SidebarProps) {
+  const tool = useUIStore((state) => state.tool);
+  const setTool = useUIStore((state) => state.setTool);
+  const analysis = useUIStore((state) => state.analysis);
+  const setAnalysis = useUIStore((state) => state.setAnalysis);
+  const acFreq = useUIStore((state) => state.acFreq);
+  const setAcFreq = useUIStore((state) => state.setAcFreq);
+  const showNodes = useUIStore((state) => state.showNodes);
+  const setShowNodes = useUIStore((state) => state.setShowNodes);
+
   return (
     <div className="w-80 border-r border-white/10 bg-[#121a33]/60 p-3 overflow-y-auto">
       <h2 className="mb-2 text-lg font-semibold">Palette</h2>

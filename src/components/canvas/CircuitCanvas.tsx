@@ -1,6 +1,7 @@
 import type React from "react";
 import { CANVAS_H, CANVAS_W, GRID } from "../../constants/config";
-import type { Analysis, Entity, Selection, Solution, Terminal, Wire } from "../../types";
+import { useUIStore } from "../../store/useUIStore";
+import type { Entity, Selection, Solution, Terminal, Wire } from "../../types";
 import { nodeColor } from "../../utils/geometry";
 import { EntityView } from "./EntityView";
 
@@ -9,11 +10,9 @@ type CircuitCanvasProps = {
   entities: Entity[];
   wires: Wire[];
   selected: Selection;
-  analysis: Analysis;
   terminalMap: Map<string, Terminal>;
   pendingWire: { aTerm: string } | null;
   hoverTerm: Terminal | null;
-  showNodes: boolean;
   sol: Solution;
   onCanvasClick: (event: React.MouseEvent<SVGSVGElement>) => void;
   onMouseMove: (event: React.MouseEvent<SVGSVGElement>) => void;
@@ -29,11 +28,9 @@ export function CircuitCanvas({
   entities,
   wires,
   selected,
-  analysis,
   terminalMap,
   pendingWire,
   hoverTerm,
-  showNodes,
   sol,
   onCanvasClick,
   onMouseMove,
@@ -43,6 +40,8 @@ export function CircuitCanvas({
   onEntityClick,
   onTerminalClick,
 }: CircuitCanvasProps) {
+  const showNodes = useUIStore((state) => state.showNodes);
+
   return (
     <svg
       ref={svgRef}
@@ -87,7 +86,6 @@ export function CircuitCanvas({
           onMouseDown={onEntityMouseDown}
           onClick={() => onEntityClick(entity)}
           onTerminalClick={onTerminalClick}
-          analysis={analysis}
           sol={sol}
         />
       ))}

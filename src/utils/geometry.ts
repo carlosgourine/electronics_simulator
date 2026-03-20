@@ -12,6 +12,14 @@ export function rotatePoint(x: number, y: number, rot: number) {
 
 export const snap = (n: number) => Math.round(n / GRID) * GRID;
 
+export function getMousePosition(svg: SVGSVGElement, event: React.MouseEvent | MouseEvent) {
+  const rect = svg.getBoundingClientRect();
+  return {
+    x: snap(event.clientX - rect.left),
+    y: snap(event.clientY - rect.top),
+  };
+}
+
 export function hitTerminal(terminals: Iterable<Terminal>, mx: number, my: number, radius = 10) {
   const radiusSquared = radius * radius;
   for (const terminal of terminals) {

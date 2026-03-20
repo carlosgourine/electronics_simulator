@@ -2,7 +2,8 @@ import { useState } from "react";
 import type React from "react";
 import { getCurrentInstant } from "../../engine/measurements";
 import { useTimeStore } from "../../store/useTimeStore";
-import type { Analysis, Entity, Solution, Terminal } from "../../types";
+import { useUIStore } from "../../store/useUIStore";
+import type { Entity, Solution, Terminal } from "../../types";
 import { worldTerminals } from "../../utils/entities";
 import { EntityIcon } from "./EntityIcon";
 
@@ -12,13 +13,13 @@ type EntityViewProps = {
   onMouseDown: (entity: Entity, event: React.MouseEvent) => void;
   onClick: () => void;
   onTerminalClick: (terminal: Terminal) => void;
-  analysis: Analysis;
   sol: Solution;
 };
 
-export function EntityView({ entity, selected, onMouseDown, onClick, onTerminalClick, analysis, sol }: EntityViewProps) {
+export function EntityView({ entity, selected, onMouseDown, onClick, onTerminalClick, sol }: EntityViewProps) {
   const t = useTimeStore((state) => state.t);
   const running = useTimeStore((state) => state.running);
+  const analysis = useUIStore((state) => state.analysis);
   const [isHovered, setIsHovered] = useState(false);
   const current = running ? getCurrentInstant(entity, sol, analysis, t) : null;
   const terminals = worldTerminals(entity);

@@ -1,17 +1,11 @@
 import { useMemo } from "react";
-import { getCurrentInstant, getCurrentPhasor, getVoltagePhasor } from "../../engine/measurements";
+import { getProbeValue } from "../../engine/measurements";
 import { SmoothTrace } from "../charts/SmoothTrace";
 import { useTimeStore } from "../../store/useTimeStore";
 import { ANALYSIS } from "../../types";
 import { formatI, formatV } from "../../utils/formatters";
-import { C0, cAbs } from "../../utils/math";
-import type { ACSolution, DCSolution, Entity, Solution } from "../../types";
-
-type ProbeData =
-  | { type: "v-node"; id: string }
-  | { type: "v-entity"; id: string }
-  | { type: "i-node"; id: string }
-  | { type: "i-entity"; id: string };
+import { cAbs } from "../../utils/math";
+import type { Entity, ProbeData, Solution } from "../../types";
 
 type ProbeModalProps = {
   probeData: ProbeData;
@@ -23,41 +17,10 @@ type ProbeModalProps = {
 
 export function ProbeModal({ probeData, entities, analysis, sol, onClose }: ProbeModalProps) {
   const t = useTimeStore((state) => state.t);
-
-  const probedEntity = useMemo(
-    () => (probeData.type.endsWith("entity") ? entities.find((entity) => entity.id === probeData.id) || null : null),
-    [entities, probeData],
+  const { value, phasor, entity } = useMemo(
+    () => getProbeValue(probeData, sol, entities, analysis, t),
+    [analysis, entities, probeData, sol, t],
   );
-  const dcSol = analysis === ANALYSIS.DC ? (sol as DCSolution) : null;
-  const acSol = analysis === ANALYSIS.AC ? (sol as ACSolution) : null;
-
-  const reading = useMemo(() => {
-    if (!sol.ok) return null;
-
-    if (probeData.type === "v-node") {
-      const nodeId = Number(probeData.id);
-      if (dcSol) return dcSol.V.get(nodeId) || 0;
-      const phasor = acSol?.V.get(nodeId) || C0(0, 0);
-      const omega = acSol?.omega || 0;
-      return phasor.re * Math.cos(omega * t) - phasor.im * Math.sin(omega * t);
-    }
-
-    if (probeData.type === "v-entity") {
-      if (!probedEntity) return null;
-      const phasor = getVoltagePhasor(probedEntity, sol, analysis);
-      if (!phasor) return null;
-      if (dcSol) return phasor.re;
-      const omega = acSol?.omega || 0;
-      return phasor.re * Math.cos(omega * t) - phasor.im * Math.sin(omega * t);
-    }
-
-    if (probeData.type === "i-entity") {
-      if (!probedEntity) return null;
-      return getCurrentInstant(probedEntity, sol, analysis, t);
-    }
-
-    return 0;
-  }, [acSol, analysis, dcSol, probeData, probedEntity, sol, t]);
 
   const title = probeData.type.startsWith("v") ? "Voltage Probe" : "Current Probe";
 
@@ -69,7 +32,7 @@ export function ProbeModal({ probeData, entities, analysis, sol, onClose }: Prob
     if (probeData.type === "v-node") {
       return (
         <>
-          <div className="mb-2 text-center text-5xl font-semibold text-white">{formatV(reading || 0)}</div>
+          <div className="mb-2 text-center text-5xl font-semibold text-white">{formatV(value)}</div>
           <div className="mb-2 text-center text-xs text-white/50">Node {probeData.id} (Relative to Ground)</div>
           <SmoothTrace probeData={probeData} entities={entities} analysis={analysis} sol={sol} />
         </>
@@ -77,10 +40,10 @@ export function ProbeModal({ probeData, entities, analysis, sol, onClose }: Prob
     }
 
     if (probeData.type === "v-entity") {
-      const label = probedEntity?.label || probedEntity?.type || "component";
+      const label = entity?.label || entity?.type || "component";
       return (
         <>
-          <div className="mb-2 text-center text-5xl font-semibold text-white">{formatV(reading || 0)}</div>
+          <div className="mb-2 text-center text-5xl font-semibold text-white">{formatV(value)}</div>
           <div className="mb-2 text-center text-xs text-white/50">Voltage drop across {label}</div>
           <SmoothTrace probeData={probeData} entities={entities} analysis={analysis} sol={sol} />
         </>
@@ -88,16 +51,14 @@ export function ProbeModal({ probeData, entities, analysis, sol, onClose }: Prob
     }
 
     if (probeData.type === "i-entity") {
-      const label = probedEntity?.label || probedEntity?.type || "component";
-      const phasor = probedEntity ? getCurrentPhasor(probedEntity, sol, analysis) : null;
-      const isAC = analysis === ANALYSIS.AC && phasor;
+      const label = entity?.label || entity?.type || "component";
       return (
         <>
-          <div className="mb-2 text-center text-5xl font-semibold text-[#ffd60a]">{formatI(reading || 0)}</div>
+          <div className="mb-2 text-center text-5xl font-semibold text-[#ffd60a]">{formatI(value)}</div>
           <div className="mb-2 text-center text-xs text-white/50">Current through {label}</div>
-          {isAC && (
+          {analysis === ANALYSIS.AC && (
             <div className="mb-2 text-center text-xs text-white/50">
-              |I| = {formatI(cAbs(phasor || C0()))}
+              |I| = {formatI(cAbs(phasor))}
             </div>
           )}
           <SmoothTrace probeData={probeData} entities={entities} analysis={analysis} sol={sol} />

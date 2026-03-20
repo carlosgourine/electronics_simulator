@@ -1,4 +1,4 @@
-import type { ACSolution, Analysis, C, DCSolution, Entity, PhasorItem, PhasorMode, Solution } from "../types";
+import type { ACSolution, Analysis, C, DCSolution, Entity, PhasorItem, PhasorMode, ProbeData, Solution } from "../types";
 import { worldTerminals } from "../utils/entities";
 import { nodeColor, phasorColor } from "../utils/geometry";
 import { C0, cAbs, cAdd, cArg, cDiv, cMul, cSub } from "../utils/math";
@@ -109,6 +109,41 @@ export function getCurrentInstant(entity: Entity, solution: Solution, analysis: 
   if (analysis === "dc") return phasor.re;
   const omega = (solution as ACSolution).omega;
   return phasor.re * Math.cos(omega * t) - phasor.im * Math.sin(omega * t);
+}
+
+export function getProbeValue(probeData: ProbeData, solution: Solution, entities: Entity[], analysis: Analysis, t = 0) {
+  if (!solution.ok) return { value: 0, phasor: C0(0, 0), entity: null };
+
+  if (probeData.type === "v-node") {
+    if (analysis === "dc") {
+      const dc = solution as DCSolution;
+      const value = dc.V.get(Number(probeData.id)) || 0;
+      return { value, phasor: C0(value, 0), entity: null };
+    }
+
+    const ac = solution as ACSolution;
+    const phasor = ac.V.get(Number(probeData.id)) || C0(0, 0);
+    const value = phasor.re * Math.cos(ac.omega * t) - phasor.im * Math.sin(ac.omega * t);
+    return { value, phasor, entity: null };
+  }
+
+  if (probeData.type === "v-entity") {
+    const entity = entities.find((item) => item.id === probeData.id) || null;
+    const phasor = entity ? getVoltagePhasor(entity, solution, analysis) || C0(0, 0) : C0(0, 0);
+    const value = analysis === "dc"
+      ? phasor.re
+      : phasor.re * Math.cos((solution as ACSolution).omega * t) - phasor.im * Math.sin((solution as ACSolution).omega * t);
+    return { value, phasor, entity };
+  }
+
+  if (probeData.type === "i-entity") {
+    const entity = entities.find((item) => item.id === probeData.id) || null;
+    const phasor = entity ? getCurrentPhasor(entity, solution, analysis) || C0(0, 0) : C0(0, 0);
+    const value = entity ? getCurrentInstant(entity, solution, analysis, t) || 0 : 0;
+    return { value, phasor, entity };
+  }
+
+  return { value: 0, phasor: C0(0, 0), entity: null };
 }
 
 export function collectVoltagePhasors(entities: Entity[], ac: ACSolution, mode: PhasorMode): PhasorItem[] {

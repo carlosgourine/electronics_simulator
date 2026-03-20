@@ -5,33 +5,22 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PhasorModal } from "./components/modals/PhasorModal";
 import { ProbeModal } from "./components/modals/ProbeModal";
 import { Sidebar } from "./components/panels/Sidebar";
-import { GRID } from "./constants/config";
-import {
-  collectCurrentPhasors,
-  collectVoltagePhasors,
-} from "./engine/measurements";
+import { StatusBar } from "./components/panels/StatusBar";
+import { collectCurrentPhasors, collectVoltagePhasors } from "./engine/measurements";
 import { solveAC } from "./engine/solveAC";
 import { solveDC } from "./engine/solveDC";
 import { useCircuit } from "./hooks/useCircuit";
 import { useDraggable } from "./hooks/useDraggable";
 import { useKey } from "./hooks/useKey";
 import { useTimeStore } from "./store/useTimeStore";
-import type { Analysis, Entity, EntityType, PhasorMode, Terminal, Tool } from "./types";
+import { useUIStore } from "./store/useUIStore";
+import type { Entity, EntityType, PhasorMode, ProbeData, Terminal } from "./types";
 import { ANALYSIS, TOOL } from "./types";
 import { worldTerminals } from "./utils/entities";
-import { hitTerminal, snap } from "./utils/geometry";
+import { getMousePosition, hitTerminal } from "./utils/geometry";
 import { parseHz } from "./utils/parser";
 
-function getMouse(svg: SVGSVGElement, event: React.MouseEvent | MouseEvent) {
-  const rect = svg.getBoundingClientRect();
-  return {
-    x: snap(event.clientX - rect.left),
-    y: snap(event.clientY - rect.top),
-  };
-}
-
 export default function App() {
-  const [tool, setTool] = useState<Tool>(TOOL.SELECT);
   const {
     entities,
     wires,
@@ -45,14 +34,13 @@ export default function App() {
     deleteEntity: deleteCircuitEntity,
     deleteWire,
   } = useCircuit();
+  const tool = useUIStore((state) => state.tool);
+  const setTool = useUIStore((state) => state.setTool);
+  const analysis = useUIStore((state) => state.analysis);
+  const acFreq = useUIStore((state) => state.acFreq);
   const [pendingWire, setPendingWire] = useState<{ aTerm: string } | null>(null);
   const [hoverTerm, setHoverTerm] = useState<Terminal | null>(null);
-  const [showNodes, setShowNodes] = useState(false);
-  const [probeData, setProbeData] = useState<
-    { type: "v-node" | "v-entity" | "i-node" | "i-entity"; id: string } | null
-  >(null);
-  const [analysis, setAnalysis] = useState<Analysis>(ANALYSIS.DC);
-  const [acFreq, setAcFreq] = useState("1kHz");
+  const [probeData, setProbeData] = useState<ProbeData | null>(null);
   const [phasorOpen, setPhasorOpen] = useState(false);
   const [phasorMode, setPhasorMode] = useState<PhasorMode>("components");
 
@@ -99,7 +87,9 @@ export default function App() {
 
   function deleteEntity(entityId: string) {
     deleteCircuitEntity(entityId);
-    if ((probeData?.type === "i-entity" || probeData?.type === "v-entity") && probeData.id === entityId) setProbeData(null);
+    if ((probeData?.type === "i-entity" || probeData?.type === "v-entity") && probeData.id === entityId) {
+      setProbeData(null);
+    }
   }
 
   function rotateSelectedEntity() {
@@ -148,7 +138,7 @@ export default function App() {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const point = getMouse(svg, event);
+    const point = getMousePosition(svg, event);
 
     if (tool === TOOL.PROBE_V) {
       if (hoverTerm) {
@@ -188,14 +178,14 @@ export default function App() {
   function onMouseMove(event: React.MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current;
     if (!svg) return;
-    const point = getMouse(svg, event);
+    const point = getMousePosition(svg, event);
     setHoverTerm(hitTerminal(terminalMap.values(), point.x, point.y));
   }
 
   const startDrag = useDraggable({
     getMouseCoord: (event) => {
       const svg = svgRef.current;
-      return svg ? getMouse(svg, event) : { x: 0, y: 0 };
+      return svg ? getMousePosition(svg, event) : { x: 0, y: 0 };
     },
     moveEntity,
     finishDrag: snapEntityToGrid,
@@ -207,7 +197,6 @@ export default function App() {
 
   const voltagePhasors = useMemo(() => collectVoltagePhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
   const currentPhasors = useMemo(() => collectCurrentPhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
-
   const omegaText = analysis === ANALYSIS.AC && sol.ok ? `omega = ${ac.omega.toFixed(2)} rad/s` : null;
 
   function handleContextMenu(event: React.MouseEvent<SVGSVGElement>) {
@@ -271,17 +260,9 @@ export default function App() {
     <ErrorBoundary>
       <div className="flex h-full w-full bg-[#0b1020] text-[#e6ecff]">
         <Sidebar
-          tool={tool}
-          setTool={setTool}
-          analysis={analysis}
-          setAnalysis={setAnalysis}
-          acFreq={acFreq}
-          setAcFreq={setAcFreq}
           running={running}
           onToggleRunning={toggleRunning}
           setPhasorOpen={setPhasorOpen}
-          showNodes={showNodes}
-          setShowNodes={setShowNodes}
           selectedEntity={selectedEntity}
           updateSelected={updateSelected}
           sol={sol}
@@ -294,11 +275,9 @@ export default function App() {
             entities={entities}
             wires={wires}
             selected={selected}
-            analysis={analysis}
             terminalMap={terminalMap}
             pendingWire={pendingWire}
             hoverTerm={hoverTerm}
-            showNodes={showNodes}
             sol={sol}
             onCanvasClick={onCanvasClick}
             onMouseMove={onMouseMove}
@@ -322,13 +301,7 @@ export default function App() {
 
           {probeData && <ProbeModal probeData={probeData} entities={entities} analysis={analysis} sol={sol} onClose={() => setProbeData(null)} />}
 
-          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs text-white/70">
-            <div>
-              Mode: <span className="text-white">{tool === TOOL.SELECT ? "Select/Move" : tool === TOOL.PROBE_V ? "Probe Voltage" : tool === TOOL.PROBE_I ? "Probe Current" : `Place ${tool}`}</span>
-              {pendingWire && <span className="ml-3 text-[#ffd60a]">(click another terminal to finish wire)</span>}
-            </div>
-            <div>Tips: R to rotate • Right-click to cancel • Snap {GRID}px</div>
-          </div>
+          <StatusBar tool={tool} pendingWire={Boolean(pendingWire)} />
         </div>
       </div>
     </ErrorBoundary>

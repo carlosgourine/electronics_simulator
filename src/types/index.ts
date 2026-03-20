@@ -59,6 +59,12 @@ export type Selection = {
   id: string | null;
 };
 
+export type ProbeData =
+  | { type: "v-node"; id: string }
+  | { type: "v-entity"; id: string }
+  | { type: "i-node"; id: string }
+  | { type: "i-entity"; id: string };
+
 export type TracePoint = {
   t: number;
   v: number;
