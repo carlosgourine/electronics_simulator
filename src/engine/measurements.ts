@@ -5,6 +5,9 @@ import { nodeColor, phasorColor } from "../utils/geometry";
 import { C0, cAbs, cAdd, cArg, cDiv, cMul, cSub } from "../utils/math";
 import { parsePhase, parseSI } from "../utils/parser";
 
+const MIN_RESISTANCE = 1e-6;
+const MIN_INDUCTANCE = 1e-9;
+
 function getTermNodes(entity: Entity, nodeOf: Map<string, number>) {
   const terminals = worldTerminals(entity);
   return {
@@ -47,10 +50,14 @@ export function getCurrentPhasor(entity: Entity, solution: Solution, analysis: A
     const vab = Va - Vb;
 
     if (entity.type === "resistor") {
-      const resistance = parseSI(entity.value || "1k") || 1e9;
+      const resistance = Math.max(parseSI(entity.value || "1k") || 0, MIN_RESISTANCE);
       return C0(vab / resistance, 0);
     }
     if (entity.type === "vsrc") {
+      const index = dc.vsIndexOf.get(entity.id);
+      return C0(index === undefined ? 0 : dc.Ivs[index] || 0, 0);
+    }
+    if (entity.type === "inductor") {
       const index = dc.vsIndexOf.get(entity.id);
       return C0(index === undefined ? 0 : dc.Ivs[index] || 0, 0);
     }
@@ -66,7 +73,7 @@ export function getCurrentPhasor(entity: Entity, solution: Solution, analysis: A
   const omega = ac.omega;
 
   if (entity.type === "resistor") {
-    const resistance = parseSI(entity.value || "1k") || 1e9;
+    const resistance = Math.max(parseSI(entity.value || "1k") || 0, MIN_RESISTANCE);
     return C0(vab.re / resistance, vab.im / resistance);
   }
   if (entity.type === "capacitor") {
@@ -74,7 +81,7 @@ export function getCurrentPhasor(entity: Entity, solution: Solution, analysis: A
     return cMul(C0(0, omega * capacitance), vab);
   }
   if (entity.type === "inductor") {
-    const inductance = parseSI(entity.value || "10m") || 0;
+    const inductance = Math.max(parseSI(entity.value || "10m") || 0, MIN_INDUCTANCE);
     return cMul(cDiv(C0(1, 0), C0(0, omega * inductance)), vab);
   }
   if (entity.type === "vsrc") {

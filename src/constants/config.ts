@@ -1,4 +1,4 @@
-import type { Entity, EntityType } from "../types";
+import type { Entity, EntityType, Tool } from "../types";
 
 export const GRID = 16;
 export const CANVAS_W = 1200;
@@ -6,7 +6,9 @@ export const CANVAS_H = 720;
 
 export const AMMETER_INTERNAL_RESISTANCE = 1e-6;
 
-export const PALETTE: { type: EntityType | "wire" | "probe"; label: string }[] = [
+export const PALETTE: { type: EntityType | Tool; label: string }[] = [
+  { type: "probe-v", label: "🔍 Probe Voltage (Node)" },
+  { type: "probe-i", label: "🔍 Probe Current (Part)" },
   { type: "ground", label: "Ground" },
   { type: "resistor", label: "Resistor" },
   { type: "capacitor", label: "Capacitor" },
@@ -16,7 +18,6 @@ export const PALETTE: { type: EntityType | "wire" | "probe"; label: string }[] =
   { type: "vmeter", label: "Voltmeter" },
   { type: "ameter", label: "Ammeter" },
   { type: "wire", label: "Wire" },
-  { type: "probe", label: "Probe" },
 ];
 
 export const DEFAULTS: Record<string, Partial<Entity>> = {

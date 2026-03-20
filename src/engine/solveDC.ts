@@ -5,19 +5,24 @@ import { parseSI } from "../utils/parser";
 import { solveLinear } from "./matrix";
 import { buildNodeMap } from "./nodes";
 
+const GMIN = 1e-9;
+const MIN_RESISTANCE = 1e-6;
+
 /**
  * Solves the circuit in DC using Modified Nodal Analysis (MNA).
- * Inductors are treated as shorts and capacitors as opens.
+ * Inductors are modeled as 0 V sources so their branch current remains measurable.
  */
 export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
-  const nodeOf = buildNodeMap(entities, wires, true);
+  const nodeOf = buildNodeMap(entities, wires, false);
   const hasGround = entities.some((entity) => entity.type === "ground");
   const nodes = Array.from(new Set(nodeOf.values())).sort((a, b) => a - b);
   const nonGroundNodes = nodes.filter((node) => node !== 0);
   const nodeIndex = new Map<number, number>();
   nonGroundNodes.forEach((node, index) => nodeIndex.set(node, index));
 
-  const dcVoltageSources = entities.filter((entity) => entity.type === "vsrc" && entity.wave !== "ac");
+  const dcVoltageSources = entities.filter(
+    (entity) => (entity.type === "vsrc" && entity.wave !== "ac") || entity.type === "inductor",
+  );
   const sourceCount = dcVoltageSources.length;
   const vsIndexOf = new Map<string, number>();
   dcVoltageSources.forEach((entity, index) => vsIndexOf.set(entity.id, index));
@@ -27,6 +32,7 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
   const I = new Array(nodeCount).fill(0);
   const B = Array.from({ length: nodeCount }, () => new Array(sourceCount).fill(0));
   const E = new Array(sourceCount).fill(0);
+  for (let i = 0; i < nodeCount; i += 1) G[i][i] += GMIN;
 
   const matrixIndex = (node: number | undefined): number | null => {
     if (node === undefined || node === 0) return null;
@@ -35,8 +41,9 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
   };
 
   const stampResistor = (n1: number | undefined, n2: number | undefined, resistance: number) => {
-    if (!Number.isFinite(resistance) || resistance <= 0) return;
-    const conductance = 1 / resistance;
+    if (!Number.isFinite(resistance)) return;
+    const safeResistance = Math.max(resistance, MIN_RESISTANCE);
+    const conductance = 1 / safeResistance;
     const i1 = matrixIndex(n1);
     const i2 = matrixIndex(n2);
     if (i1 !== null) G[i1][i1] += conductance;
@@ -74,7 +81,7 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
     if (nA === nB) {
       return {
         ok: false,
-        reason: `Voltage source '${source.label || "V"}' is shorted (both pins on node ${nA}).`,
+        reason: `Voltage-defined branch '${source.label || source.type}' is shorted (both pins on node ${nA}).`,
         nodeOf,
         V: new Map(),
         vsIndexOf,
@@ -102,7 +109,7 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
       continue;
     }
 
-    if (entity.type === "capacitor" || entity.type === "inductor" || entity.type === "vmeter") continue;
+    if (entity.type === "capacitor" || entity.type === "vmeter") continue;
 
     if (entity.type === "isrc") {
       if (entity.wave === "ac") continue;
@@ -118,6 +125,12 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
       const voltage = parseSI(entity.amplitude || "0");
       const sourceIndex = vsIndexOf.get(entity.id)!;
       if (voltage !== null) stampVoltageSource(sourceIndex, termNode.get(terminals[0].id), termNode.get(terminals[1].id), voltage);
+      continue;
+    }
+
+    if (entity.type === "inductor") {
+      const terminals = worldTerminals(entity);
+      stampVoltageSource(vsIndexOf.get(entity.id)!, termNode.get(terminals[0].id), termNode.get(terminals[1].id), 0);
       continue;
     }
 
@@ -146,7 +159,7 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
   if (!solution) {
     return {
       ok: false,
-      reason: "Singular system (check for shorts or opens; make sure the loop closes)",
+      reason: "Singular matrix (check for shorted voltage-defined branches)",
       nodeOf,
       V: new Map(),
       vsIndexOf,

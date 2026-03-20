@@ -40,7 +40,7 @@ export default function App() {
   const [hoverTerm, setHoverTerm] = useState<Terminal | null>(null);
   const [showNodes, setShowNodes] = useState(false);
   const [meterViewId, setMeterViewId] = useState<string | null>(null);
-  const [probedNode, setProbedNode] = useState<number | null>(null);
+  const [probeData, setProbeData] = useState<{ type: "v"; nodeId: number } | { type: "i"; entityId: string } | null>(null);
   const [analysis, setAnalysis] = useState<Analysis>(ANALYSIS.DC);
   const [acFreq, setAcFreq] = useState("1kHz");
   const [phasorOpen, setPhasorOpen] = useState(false);
@@ -91,6 +91,7 @@ export default function App() {
     setEntities((current) => current.filter((entity) => entity.id !== entityId));
     setWires((current) => current.filter((wire) => !wire.aTerm.startsWith(`${entityId}:`) && !wire.bTerm.startsWith(`${entityId}:`)));
     if (meterViewId === entityId) setMeterViewId(null);
+    if (probeData?.type === "i" && probeData.entityId === entityId) setProbeData(null);
     setSelected({ kind: null, id: null });
   }
 
@@ -136,7 +137,7 @@ export default function App() {
         break;
       case "escape":
         setMeterViewId(null);
-        setProbedNode(null);
+        setProbeData(null);
         setPendingWire(null);
         break;
       case "delete":
@@ -166,11 +167,16 @@ export default function App() {
 
     const point = getMouse(svg, event);
 
-    if (tool === TOOL.PROBE) {
+    if (tool === TOOL.PROBE_V) {
       if (hoverTerm) {
         const nodeId = sol.nodeOf.get(hoverTerm.id);
-        if (nodeId !== undefined) setProbedNode(nodeId);
+        if (nodeId !== undefined) setProbeData({ type: "v", nodeId });
       }
+      return;
+    }
+
+    if (tool === TOOL.PROBE_I) {
+      setProbeData(null);
       return;
     }
 
@@ -270,29 +276,12 @@ export default function App() {
   const currentPhasors = useMemo(() => collectCurrentPhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
 
   const meterEntity = meterViewId ? entities.find((entity) => entity.id === meterViewId) || null : null;
+  const probedEntity = probeData?.type === "i" ? entities.find((entity) => entity.id === probeData.entityId) || null : null;
   const omegaText = analysis === ANALYSIS.AC && sol.ok ? `omega = ${ac.omega.toFixed(2)} rad/s` : null;
 
   return (
     <ErrorBoundary>
       <div className="flex h-full w-full bg-[#0b1020] text-[#e6ecff]">
-        <Sidebar
-          tool={tool}
-          setTool={setTool}
-          analysis={analysis}
-          setAnalysis={setAnalysis}
-          acFreq={acFreq}
-          setAcFreq={setAcFreq}
-          running={running}
-          onToggleRunning={toggleRunning}
-          setPhasorOpen={setPhasorOpen}
-          showNodes={showNodes}
-          setShowNodes={setShowNodes}
-          selectedEntity={selectedEntity}
-          updateSelected={updateSelected}
-          sol={sol}
-          omegaText={omegaText}
-        />
-
         <div className="relative flex-1">
           <CircuitCanvas
             svgRef={svgRef}
@@ -312,8 +301,25 @@ export default function App() {
               event.stopPropagation();
               setSelected({ kind: "wire", id: wireId });
             }}
-            onEntityMouseDown={startDrag}
+            onEntityMouseDown={(entity, event) => {
+              if (tool === TOOL.PROBE_I) {
+                event.stopPropagation();
+                return;
+              }
+              startDrag(entity, event);
+            }}
             onEntityClick={(entity) => {
+              if (tool === TOOL.PROBE_V) {
+                if (hoverTerm) {
+                  const nodeId = sol.nodeOf.get(hoverTerm.id);
+                  if (nodeId !== undefined) setProbeData({ type: "v", nodeId });
+                }
+                return;
+              }
+              if (tool === TOOL.PROBE_I) {
+                setProbeData({ type: "i", entityId: entity.id });
+                return;
+              }
               setSelected({ kind: "entity", id: entity.id });
               setTool(TOOL.SELECT);
               if (entity.type === ENTITY_TYPE.VMETER || entity.type === ENTITY_TYPE.AMETER) setMeterViewId(entity.id);
@@ -340,23 +346,38 @@ export default function App() {
             onClose={() => setPhasorOpen(false)}
           />
 
-          {probedNode !== null && (
-            <ProbeModal
-              nodeId={probedNode}
-              analysis={analysis}
-              sol={sol}
-              onClose={() => setProbedNode(null)}
-            />
+          {probeData?.type === "v" && <ProbeModal mode="v" nodeId={probeData.nodeId} analysis={analysis} sol={sol} onClose={() => setProbeData(null)} />}
+
+          {probeData?.type === "i" && probedEntity && (
+            <ProbeModal mode="i" entity={probedEntity} analysis={analysis} sol={sol} onClose={() => setProbeData(null)} />
           )}
 
           <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs text-white/70">
             <div>
-              Mode: <span className="text-white">{tool === TOOL.SELECT ? "Select/Move" : tool === TOOL.WIRE ? "Wire" : `Place ${tool}`}</span>
+              Mode: <span className="text-white">{tool === TOOL.SELECT ? "Select/Move" : tool === TOOL.WIRE ? "Wire" : tool === TOOL.PROBE_V ? "Probe Voltage" : tool === TOOL.PROBE_I ? "Probe Current" : `Place ${tool}`}</span>
               {pendingWire && <span className="ml-3 text-[#ffd60a]">(click another terminal to finish wire)</span>}
             </div>
             <div>Tips: R to rotate • Delete to remove • Snap {GRID}px</div>
           </div>
         </div>
+
+        <Sidebar
+          tool={tool}
+          setTool={setTool}
+          analysis={analysis}
+          setAnalysis={setAnalysis}
+          acFreq={acFreq}
+          setAcFreq={setAcFreq}
+          running={running}
+          onToggleRunning={toggleRunning}
+          setPhasorOpen={setPhasorOpen}
+          showNodes={showNodes}
+          setShowNodes={setShowNodes}
+          selectedEntity={selectedEntity}
+          updateSelected={updateSelected}
+          sol={sol}
+          omegaText={omegaText}
+        />
       </div>
     </ErrorBoundary>
   );

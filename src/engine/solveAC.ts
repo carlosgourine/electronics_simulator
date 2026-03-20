@@ -6,6 +6,10 @@ import { parseHz, parsePhase, parseSI } from "../utils/parser";
 import { solveLinearC } from "./matrix";
 import { buildNodeMap } from "./nodes";
 
+const GMIN = C0(1e-9, 0);
+const MIN_RESISTANCE = 1e-6;
+const MIN_INDUCTANCE = 1e-9;
+
 /**
  * Solves the circuit in AC steady state using phasor-domain MNA.
  * DC current sources open out and DC voltage sources become 0 V constraints.
@@ -67,6 +71,7 @@ export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number
   const I = Array.from({ length: nodeCount }, () => C0());
   const B = Array.from({ length: nodeCount }, () => Array.from({ length: sourceCount }, () => C0()));
   const E = Array.from({ length: sourceCount }, () => C0());
+  for (let i = 0; i < nodeCount; i += 1) G[i][i] = cAdd(G[i][i], GMIN);
 
   const matrixIndex = (node: number | undefined): number | null => {
     if (node === undefined || node === 0) return null;
@@ -124,8 +129,8 @@ export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number
     const n2 = termNode.get(terminals[1]?.id || "");
 
     if (entity.type === "resistor") {
-      const resistance = parseSI(entity.value || "1k");
-      if (resistance && resistance > 0) stampAdmittance(n1, n2, C0(1 / resistance, 0));
+      const resistance = Math.max(parseSI(entity.value || "1k") || 0, MIN_RESISTANCE);
+      stampAdmittance(n1, n2, C0(1 / resistance, 0));
       continue;
     }
 
@@ -136,10 +141,8 @@ export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number
     }
 
     if (entity.type === "inductor") {
-      const inductance = parseSI(entity.value || "10m");
-      if (inductance && inductance > 0) {
-        stampAdmittance(n1, n2, cDiv(C0(1, 0), cMul(j, C0(omega * inductance, 0))));
-      }
+      const inductance = Math.max(parseSI(entity.value || "10m") || 0, MIN_INDUCTANCE);
+      stampAdmittance(n1, n2, cDiv(C0(1, 0), cMul(j, C0(omega * inductance, 0))));
       continue;
     }
 
