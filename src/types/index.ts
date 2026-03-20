@@ -7,8 +7,6 @@ export const ENTITY_TYPE = {
   INDUCTOR: "inductor",
   VSRC: "vsrc",
   ISRC: "isrc",
-  VMETER: "vmeter",
-  AMETER: "ameter",
 } as const;
 
 export const TOOL = {

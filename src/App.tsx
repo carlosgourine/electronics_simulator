@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { CircuitCanvas } from "./components/canvas/CircuitCanvas";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { MeterModal } from "./components/modals/MeterModal";
 import { PhasorModal } from "./components/modals/PhasorModal";
 import { ProbeModal } from "./components/modals/ProbeModal";
 import { Sidebar } from "./components/panels/Sidebar";
@@ -18,7 +17,7 @@ import { useDraggable } from "./hooks/useDraggable";
 import { useKey } from "./hooks/useKey";
 import { useTimeStore } from "./store/useTimeStore";
 import type { Analysis, Entity, EntityType, PhasorMode, Terminal, Tool } from "./types";
-import { ANALYSIS, ENTITY_TYPE, TOOL } from "./types";
+import { ANALYSIS, TOOL } from "./types";
 import { worldTerminals } from "./utils/entities";
 import { hitTerminal, snap } from "./utils/geometry";
 import { parseHz } from "./utils/parser";
@@ -49,7 +48,6 @@ export default function App() {
   const [pendingWire, setPendingWire] = useState<{ aTerm: string } | null>(null);
   const [hoverTerm, setHoverTerm] = useState<Terminal | null>(null);
   const [showNodes, setShowNodes] = useState(false);
-  const [meterViewId, setMeterViewId] = useState<string | null>(null);
   const [probeData, setProbeData] = useState<
     { type: "v-node" | "v-entity" | "i-node" | "i-entity"; id: string } | null
   >(null);
@@ -101,7 +99,6 @@ export default function App() {
 
   function deleteEntity(entityId: string) {
     deleteCircuitEntity(entityId);
-    if (meterViewId === entityId) setMeterViewId(null);
     if ((probeData?.type === "i-entity" || probeData?.type === "v-entity") && probeData.id === entityId) setProbeData(null);
   }
 
@@ -122,18 +119,12 @@ export default function App() {
         event.preventDefault();
         rotateSelectedEntity();
         break;
-      case "enter":
-        if (selectedEntity && (selectedEntity.type === ENTITY_TYPE.VMETER || selectedEntity.type === ENTITY_TYPE.AMETER)) {
-          setMeterViewId(selectedEntity.id);
-        }
-        break;
       case "p":
         if (analysis !== ANALYSIS.AC) break;
         event.preventDefault();
         setPhasorOpen((value) => !value);
         break;
       case "escape":
-        setMeterViewId(null);
         setProbeData(null);
         setPendingWire(null);
         break;
@@ -217,7 +208,6 @@ export default function App() {
   const voltagePhasors = useMemo(() => collectVoltagePhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
   const currentPhasors = useMemo(() => collectCurrentPhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
 
-  const meterEntity = meterViewId ? entities.find((entity) => entity.id === meterViewId) || null : null;
   const omegaText = analysis === ANALYSIS.AC && sol.ok ? `omega = ${ac.omega.toFixed(2)} rad/s` : null;
 
   function handleContextMenu(event: React.MouseEvent<SVGSVGElement>) {
@@ -252,10 +242,6 @@ export default function App() {
 
     setSelected({ kind: "entity", id: entity.id });
     setTool(TOOL.SELECT);
-
-    if (entity.type === ENTITY_TYPE.VMETER || entity.type === ENTITY_TYPE.AMETER) {
-      setMeterViewId(entity.id);
-    }
   }
 
   function handleTerminalClick(terminal: Terminal) {
@@ -322,15 +308,6 @@ export default function App() {
             onEntityClick={handleEntityClick}
             onTerminalClick={handleTerminalClick}
           />
-
-          {meterEntity && (
-            <MeterModal
-              entity={meterEntity}
-              analysis={analysis}
-              sol={sol}
-              onClose={() => setMeterViewId(null)}
-            />
-          )}
 
           <PhasorModal
             analysis={analysis}

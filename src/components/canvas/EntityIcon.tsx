@@ -86,16 +86,6 @@ export function EntityIcon({ entity }: { entity: Entity }) {
       );
     }
     shapes.push(<line key="s3" x1={entity.x + r} y1={entity.y} x2={B.x} y2={B.y} stroke="#9fb0d0" strokeWidth={2} />);
-  } else if (entity.type === "vmeter" || entity.type === "ameter") {
-    const r = 14;
-    shapes.push(<line key="m1" x1={A.x} y1={A.y} x2={entity.x - r} y2={entity.y} stroke="#9fb0d0" strokeWidth={2} />);
-    shapes.push(<circle key="m2" cx={entity.x} cy={entity.y} r={r} fill="#0b1020" stroke="#ffd60a" />);
-    shapes.push(
-      <text key="m3" x={entity.x} y={entity.y + 4} textAnchor="middle" fontSize={12} fill="#ffd60a">
-        {entity.type === "vmeter" ? "V" : "A"}
-      </text>,
-    );
-    shapes.push(<line key="m4" x1={entity.x + r} y1={entity.y} x2={B.x} y2={B.y} stroke="#9fb0d0" strokeWidth={2} />);
   }
 
   return (

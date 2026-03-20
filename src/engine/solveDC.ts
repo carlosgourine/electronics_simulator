@@ -1,4 +1,3 @@
-import { AMMETER_INTERNAL_RESISTANCE } from "../constants/config";
 import type { DCSolution, Entity, Wire } from "../types";
 import { worldTerminals } from "../utils/entities";
 import { parseSI } from "../utils/parser";
@@ -109,7 +108,7 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
       continue;
     }
 
-    if (entity.type === "capacitor" || entity.type === "vmeter") continue;
+    if (entity.type === "capacitor") continue;
 
     if (entity.type === "isrc") {
       if (entity.wave === "ac") continue;
@@ -132,11 +131,6 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
       const terminals = worldTerminals(entity);
       stampVoltageSource(vsIndexOf.get(entity.id)!, termNode.get(terminals[0].id), termNode.get(terminals[1].id), 0);
       continue;
-    }
-
-    if (entity.type === "ameter") {
-      const terminals = worldTerminals(entity);
-      stampResistor(termNode.get(terminals[0].id), termNode.get(terminals[1].id), AMMETER_INTERNAL_RESISTANCE);
     }
   }
 

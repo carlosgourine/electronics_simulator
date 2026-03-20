@@ -1,4 +1,3 @@
-import { AMMETER_INTERNAL_RESISTANCE } from "../constants/config";
 import type { ACSolution, Entity, Wire } from "../types";
 import { worldTerminals } from "../utils/entities";
 import { C0, cAdd, cDiv, cMul, cSub } from "../utils/math";
@@ -145,13 +144,6 @@ export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number
       stampAdmittance(n1, n2, cDiv(C0(1, 0), cMul(j, C0(omega * inductance, 0))));
       continue;
     }
-
-    if (entity.type === "ameter") {
-      stampAdmittance(n1, n2, C0(1 / AMMETER_INTERNAL_RESISTANCE, 0));
-      continue;
-    }
-
-    if (entity.type === "vmeter") continue;
 
     if (entity.type === "isrc") {
       if (entity.wave !== "ac") continue;

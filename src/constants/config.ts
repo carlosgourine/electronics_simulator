@@ -4,8 +4,6 @@ export const GRID = 16;
 export const CANVAS_W = 1200;
 export const CANVAS_H = 720;
 
-export const AMMETER_INTERNAL_RESISTANCE = 1e-6;
-
 export const PALETTE: { type: EntityType | Tool; label: string }[] = [
   { type: "probe-v", label: "🔍 Probe Voltage (Node)" },
   { type: "probe-i", label: "🔍 Probe Current (Part)" },
@@ -15,8 +13,6 @@ export const PALETTE: { type: EntityType | Tool; label: string }[] = [
   { type: "inductor", label: "Inductor" },
   { type: "vsrc", label: "V Source" },
   { type: "isrc", label: "I Source" },
-  { type: "vmeter", label: "Voltmeter" },
-  { type: "ameter", label: "Ammeter" },
 ];
 
 export const DEFAULTS: Record<string, Partial<Entity>> = {
@@ -40,8 +36,6 @@ export const DEFAULTS: Record<string, Partial<Entity>> = {
     label: "I",
   },
   ground: { label: "GND" },
-  vmeter: { label: "Vm" },
-  ameter: { label: "Am" },
 };
 
 export const TYPE_PREFIX: Partial<Record<EntityType, string>> = {
@@ -50,8 +44,6 @@ export const TYPE_PREFIX: Partial<Record<EntityType, string>> = {
   inductor: "L",
   vsrc: "V",
   isrc: "I",
-  vmeter: "VM",
-  ameter: "AM",
   ground: "GND",
 };
 

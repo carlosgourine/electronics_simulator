@@ -1,4 +1,3 @@
-import { AMMETER_INTERNAL_RESISTANCE } from "../constants/config";
 import type { ACSolution, Analysis, C, DCSolution, Entity, PhasorItem, PhasorMode, Solution } from "../types";
 import { worldTerminals } from "../utils/entities";
 import { nodeColor, phasorColor } from "../utils/geometry";
@@ -43,8 +42,6 @@ export function getCurrentPhasor(entity: Entity, solution: Solution, analysis: A
 
   if (analysis === "dc") {
     const dc = solution as DCSolution;
-    if (entity.type === "vmeter") return C0(0, 0);
-
     const Va = nA != null ? dc.V.get(nA) || 0 : 0;
     const Vb = nB != null ? dc.V.get(nB) || 0 : 0;
     const vab = Va - Vb;
@@ -62,7 +59,6 @@ export function getCurrentPhasor(entity: Entity, solution: Solution, analysis: A
       return C0(index === undefined ? 0 : dc.Ivs[index] || 0, 0);
     }
     if (entity.type === "isrc") return C0(parseSI(entity.amplitude || "0") || 0, 0);
-    if (entity.type === "ameter") return C0(vab / AMMETER_INTERNAL_RESISTANCE, 0);
     return C0(0, 0);
   }
 
@@ -93,9 +89,6 @@ export function getCurrentPhasor(entity: Entity, solution: Solution, analysis: A
     const amplitude = parseSI(entity.amplitude || "0") || 0;
     const phase = parsePhase(entity.phaseEnabled ? entity.phase : "0");
     return C0(amplitude * Math.cos(phase), amplitude * Math.sin(phase));
-  }
-  if (entity.type === "ameter") {
-    return C0(vab.re / AMMETER_INTERNAL_RESISTANCE, vab.im / AMMETER_INTERNAL_RESISTANCE);
   }
   return C0(0, 0);
 }
@@ -172,7 +165,6 @@ export function collectCurrentPhasors(entities: Entity[], ac: ACSolution, mode: 
   if (mode === "components" || mode === "nodeGround") {
     const items: PhasorItem[] = [];
     for (const entity of entities) {
-      if (entity.type === "vmeter") continue;
       const ph = getCurrentPhasor(entity, ac, "ac");
       if (!ph || !Number.isFinite(cAbs(ph))) continue;
       const label = entity.label || entity.type;
@@ -185,7 +177,6 @@ export function collectCurrentPhasors(entities: Entity[], ac: ACSolution, mode: 
   const colors = new Map<string, string>();
 
   for (const entity of entities) {
-    if (entity.type === "vmeter") continue;
     const ph = getCurrentPhasor(entity, ac, "ac");
     if (!ph || !Number.isFinite(cAbs(ph))) continue;
 
