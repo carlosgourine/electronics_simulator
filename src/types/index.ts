@@ -14,6 +14,27 @@ export type Tool = EntityType | "wire" | "select";
 export type Analysis = "dc" | "ac";
 export type PhasorMode = "components" | "nodeGround" | "nodePairs";
 
+export const ENTITY_TYPE = {
+  GROUND: "ground",
+  RESISTOR: "resistor",
+  CAPACITOR: "capacitor",
+  INDUCTOR: "inductor",
+  VSRC: "vsrc",
+  ISRC: "isrc",
+  VMETER: "vmeter",
+  AMETER: "ameter",
+} as const;
+
+export const TOOL = {
+  SELECT: "select",
+  WIRE: "wire",
+} as const;
+
+export const ANALYSIS = {
+  DC: "dc",
+  AC: "ac",
+} as const;
+
 export type Entity = {
   id: string;
   type: EntityType;
