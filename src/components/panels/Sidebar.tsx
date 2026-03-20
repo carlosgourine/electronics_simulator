@@ -40,7 +40,7 @@ export function Sidebar({
   omegaText,
 }: SidebarProps) {
   return (
-    <div className="w-80 border-l border-white/10 bg-[#121a33]/60 p-3">
+    <div className="w-80 border-r border-white/10 bg-[#121a33]/60 p-3 overflow-y-auto">
       <h2 className="mb-2 text-lg font-semibold">Palette</h2>
       <div className="grid grid-cols-1 gap-2">
         {PALETTE.map((item) => (

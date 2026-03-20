@@ -10,7 +10,7 @@ export type EntityType =
   | "vmeter"
   | "ameter";
 
-export type Tool = EntityType | "wire" | "select" | "probe-v" | "probe-i";
+export type Tool = EntityType | "select" | "probe-v" | "probe-i";
 export type Analysis = "dc" | "ac";
 export type PhasorMode = "components" | "nodeGround" | "nodePairs";
 
@@ -27,7 +27,6 @@ export const ENTITY_TYPE = {
 
 export const TOOL = {
   SELECT: "select",
-  WIRE: "wire",
   PROBE_V: "probe-v",
   PROBE_I: "probe-i",
 } as const;

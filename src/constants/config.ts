@@ -17,7 +17,6 @@ export const PALETTE: { type: EntityType | Tool; label: string }[] = [
   { type: "isrc", label: "I Source" },
   { type: "vmeter", label: "Voltmeter" },
   { type: "ameter", label: "Ammeter" },
-  { type: "wire", label: "Wire" },
 ];
 
 export const DEFAULTS: Record<string, Partial<Entity>> = {

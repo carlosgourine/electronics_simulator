@@ -1,7 +1,6 @@
 import type React from "react";
 import { CANVAS_H, CANVAS_W, GRID } from "../../constants/config";
-import type { Analysis, Entity, Selection, Solution, Terminal, Tool, Wire } from "../../types";
-import { TOOL } from "../../types";
+import type { Analysis, Entity, Selection, Solution, Terminal, Wire } from "../../types";
 import { nodeColor } from "../../utils/geometry";
 import { EntityView } from "./EntityView";
 
@@ -12,16 +11,17 @@ type CircuitCanvasProps = {
   selected: Selection;
   analysis: Analysis;
   termIndex: Map<string, Terminal>;
-  tool: Tool;
   pendingWire: { aTerm: string } | null;
   hoverTerm: Terminal | null;
   showNodes: boolean;
   sol: Solution;
   onCanvasClick: (event: React.MouseEvent<SVGSVGElement>) => void;
   onMouseMove: (event: React.MouseEvent<SVGSVGElement>) => void;
+  onContextMenu: (event: React.MouseEvent<SVGSVGElement>) => void;
   onWireMouseDown: (wireId: string, event: React.MouseEvent) => void;
   onEntityMouseDown: (entity: Entity, event: React.MouseEvent) => void;
   onEntityClick: (entity: Entity) => void;
+  onTerminalClick: (terminal: Terminal) => void;
 };
 
 export function CircuitCanvas({
@@ -31,16 +31,17 @@ export function CircuitCanvas({
   selected,
   analysis,
   termIndex,
-  tool,
   pendingWire,
   hoverTerm,
   showNodes,
   sol,
   onCanvasClick,
   onMouseMove,
+  onContextMenu,
   onWireMouseDown,
   onEntityMouseDown,
   onEntityClick,
+  onTerminalClick,
 }: CircuitCanvasProps) {
   return (
     <svg
@@ -50,6 +51,7 @@ export function CircuitCanvas({
       className="h-full w-full cursor-crosshair"
       onClick={onCanvasClick}
       onMouseMove={onMouseMove}
+      onContextMenu={onContextMenu}
     >
       <defs>
         <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
@@ -71,7 +73,7 @@ export function CircuitCanvas({
         );
       })}
 
-      {tool === TOOL.WIRE && pendingWire && hoverTerm && (() => {
+      {pendingWire && hoverTerm && (() => {
         const a = termIndex.get(pendingWire.aTerm);
         if (!a) return null;
         return <line x1={a.x} y1={a.y} x2={hoverTerm.x} y2={hoverTerm.y} stroke="#ffd60a" strokeDasharray="6 4" strokeWidth={2} />;
@@ -84,6 +86,7 @@ export function CircuitCanvas({
           selected={selected.kind === "entity" && selected.id === entity.id}
           onMouseDown={onEntityMouseDown}
           onClick={() => onEntityClick(entity)}
+          onTerminalClick={onTerminalClick}
           analysis={analysis}
           sol={sol}
         />
