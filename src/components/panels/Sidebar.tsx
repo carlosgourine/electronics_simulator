@@ -12,7 +12,7 @@ type SidebarProps = {
   acFreq: string;
   setAcFreq: (freq: string) => void;
   running: boolean;
-  setRunning: (running: boolean | ((value: boolean) => boolean)) => void;
+  onToggleRunning: () => void;
   setPhasorOpen: (open: boolean) => void;
   showNodes: boolean;
   setShowNodes: (show: boolean) => void;
@@ -30,7 +30,7 @@ export function Sidebar({
   acFreq,
   setAcFreq,
   running,
-  setRunning,
+  onToggleRunning,
   setPhasorOpen,
   showNodes,
   setShowNodes,
@@ -89,7 +89,7 @@ export function Sidebar({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setRunning((value) => !value)}
+            onClick={onToggleRunning}
             className={`rounded-xl border px-3 py-2 transition ${running ? "border-[#19c37d]/40 bg-[#19c37d]/20 hover:border-[#19c37d]/60" : "border-white/10 hover:border-white/30"}`}
           >
             {running ? "Stop" : "Run"}

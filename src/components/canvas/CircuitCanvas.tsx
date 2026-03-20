@@ -1,6 +1,6 @@
 import type React from "react";
 import { CANVAS_H, CANVAS_W, GRID } from "../../constants/config";
-import type { Entity, Selection, Solution, Terminal, Tool, Wire } from "../../types";
+import type { Analysis, Entity, Selection, Solution, Terminal, Tool, Wire } from "../../types";
 import { TOOL } from "../../types";
 import { nodeColor } from "../../utils/geometry";
 import { EntityView } from "./EntityView";
@@ -10,12 +10,11 @@ type CircuitCanvasProps = {
   entities: Entity[];
   wires: Wire[];
   selected: Selection;
+  analysis: Analysis;
   termIndex: Map<string, Terminal>;
   tool: Tool;
   pendingWire: { aTerm: string } | null;
   hoverTerm: Terminal | null;
-  running: boolean;
-  t: number;
   showNodes: boolean;
   sol: Solution;
   onCanvasClick: (event: React.MouseEvent<SVGSVGElement>) => void;
@@ -23,8 +22,6 @@ type CircuitCanvasProps = {
   onWireMouseDown: (wireId: string, event: React.MouseEvent) => void;
   onEntityMouseDown: (entity: Entity, event: React.MouseEvent) => void;
   onEntityClick: (entity: Entity) => void;
-  getEntityCurrent: (entity: Entity) => number | null;
-  getEntityVoltage: (entity: Entity) => number | null;
 };
 
 export function CircuitCanvas({
@@ -32,12 +29,11 @@ export function CircuitCanvas({
   entities,
   wires,
   selected,
+  analysis,
   termIndex,
   tool,
   pendingWire,
   hoverTerm,
-  running,
-  t,
   showNodes,
   sol,
   onCanvasClick,
@@ -45,8 +41,6 @@ export function CircuitCanvas({
   onWireMouseDown,
   onEntityMouseDown,
   onEntityClick,
-  getEntityCurrent,
-  getEntityVoltage,
 }: CircuitCanvasProps) {
   return (
     <svg
@@ -90,10 +84,8 @@ export function CircuitCanvas({
           selected={selected.kind === "entity" && selected.id === entity.id}
           onMouseDown={onEntityMouseDown}
           onClick={() => onEntityClick(entity)}
-          running={running}
-          t={t}
-          current={getEntityCurrent(entity)}
-          voltage={getEntityVoltage(entity)}
+          analysis={analysis}
+          sol={sol}
         />
       ))}
 

@@ -1,5 +1,7 @@
 import type React from "react";
-import type { Entity } from "../../types";
+import { getCurrentInstant } from "../../engine/measurements";
+import { useTimeStore } from "../../store/useTimeStore";
+import type { Analysis, Entity, Solution } from "../../types";
 import { worldTerminals } from "../../utils/entities";
 import { EntityIcon } from "./EntityIcon";
 
@@ -8,13 +10,14 @@ type EntityViewProps = {
   selected: boolean;
   onMouseDown: (entity: Entity, event: React.MouseEvent) => void;
   onClick: () => void;
-  running: boolean;
-  t: number;
-  current: number | null;
-  voltage: number | null;
+  analysis: Analysis;
+  sol: Solution;
 };
 
-export function EntityView({ entity, selected, onMouseDown, onClick, running, t, current }: EntityViewProps) {
+export function EntityView({ entity, selected, onMouseDown, onClick, analysis, sol }: EntityViewProps) {
+  const t = useTimeStore((state) => state.t);
+  const running = useTimeStore((state) => state.running);
+  const current = running ? getCurrentInstant(entity, sol, analysis, t) : null;
   const terminals = worldTerminals(entity);
   const A = terminals[0];
   const B = terminals[1];

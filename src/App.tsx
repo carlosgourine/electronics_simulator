@@ -4,22 +4,19 @@ import { CircuitCanvas } from "./components/canvas/CircuitCanvas";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MeterModal } from "./components/modals/MeterModal";
 import { PhasorModal } from "./components/modals/PhasorModal";
+import { ProbeModal } from "./components/modals/ProbeModal";
 import { Sidebar } from "./components/panels/Sidebar";
 import { GRID } from "./constants/config";
 import {
   collectCurrentPhasors,
   collectVoltagePhasors,
-  getCurrentInstant,
-  getCurrentPhasor,
-  getMagnitudeAndAngle,
-  getVoltageInstant,
-  getVoltagePhasor,
 } from "./engine/measurements";
 import { solveAC } from "./engine/solveAC";
 import { solveDC } from "./engine/solveDC";
 import { useDraggable } from "./hooks/useDraggable";
 import { useKey } from "./hooks/useKey";
-import type { Analysis, Entity, EntityType, PhasorMode, Selection, Terminal, Tool, TracePoint, Wire } from "./types";
+import { useTimeStore } from "./store/useTimeStore";
+import type { Analysis, Entity, EntityType, PhasorMode, Selection, Terminal, Tool, Wire } from "./types";
 import { ANALYSIS, ENTITY_TYPE, TOOL } from "./types";
 import { createEntity, niceId, worldTerminals } from "./utils/entities";
 import { hitTerminal, snap } from "./utils/geometry";
@@ -41,11 +38,9 @@ export default function App() {
   const [selected, setSelected] = useState<Selection>({ kind: null, id: null });
   const [pendingWire, setPendingWire] = useState<{ aTerm: string } | null>(null);
   const [hoverTerm, setHoverTerm] = useState<Terminal | null>(null);
-  const [running, setRunning] = useState(false);
-  const [t, setT] = useState(0);
   const [showNodes, setShowNodes] = useState(false);
   const [meterViewId, setMeterViewId] = useState<string | null>(null);
-  const [trace, setTrace] = useState<TracePoint[]>([]);
+  const [probedNode, setProbedNode] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<Analysis>(ANALYSIS.DC);
   const [acFreq, setAcFreq] = useState("1kHz");
   const [phasorOpen, setPhasorOpen] = useState(false);
@@ -53,6 +48,9 @@ export default function App() {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const running = useTimeStore((state) => state.running);
+  const tick = useTimeStore((state) => state.tick);
+  const toggleRunning = useTimeStore((state) => state.toggleRunning);
 
   const selectedEntity = entities.find((entity) => selected.kind === "entity" && entity.id === selected.id) || null;
 
@@ -79,7 +77,7 @@ export default function App() {
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      setT((value) => value + dt);
+      tick(dt);
       rafRef.current = requestAnimationFrame(loop);
     };
 
@@ -87,34 +85,34 @@ export default function App() {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [running]);
+  }, [running, tick]);
 
-  useEffect(() => {
-    if (meterViewId) setTrace([]);
-  }, [meterViewId]);
+  function deleteEntity(entityId: string) {
+    setEntities((current) => current.filter((entity) => entity.id !== entityId));
+    setWires((current) => current.filter((wire) => !wire.aTerm.startsWith(`${entityId}:`) && !wire.bTerm.startsWith(`${entityId}:`)));
+    if (meterViewId === entityId) setMeterViewId(null);
+    setSelected({ kind: null, id: null });
+  }
 
-  useEffect(() => {
-    if (!meterViewId || !sol.ok) return;
-    const entity = entities.find((item) => item.id === meterViewId);
-    if (!entity) return;
+  function deleteWire(wireId: string) {
+    setWires((current) => current.filter((wire) => wire.id !== wireId));
+    setSelected({ kind: null, id: null });
+  }
 
-    const value =
-      entity.type === ENTITY_TYPE.VMETER
-        ? getVoltageInstant(entity, sol, analysis, t)
-        : getCurrentInstant(entity, sol, analysis, t);
+  function rotateSelectedEntity() {
+    if (!selectedEntity) return;
+    setEntities((current) =>
+      current.map((entity) =>
+        entity.id === selectedEntity.id ? { ...entity, rotation: ((entity.rotation || 0) + 90) % 360 } : entity,
+      ),
+    );
+  }
 
-    if (value == null || !Number.isFinite(value)) return;
-
-    setTrace((current) => {
-      const point = { t, v: value };
-      const next =
-        current.length > 0 && current[current.length - 1].t === point.t
-          ? current.slice(0, -1).concat(point)
-          : current.concat(point);
-      const maxPoints = 600;
-      return next.length > maxPoints ? next.slice(next.length - maxPoints) : next;
-    });
-  }, [analysis, entities, meterViewId, sol, t]);
+  function openSelectedMeter() {
+    if (!selectedEntity) return;
+    if (selectedEntity.type !== ENTITY_TYPE.VMETER && selectedEntity.type !== ENTITY_TYPE.AMETER) return;
+    setMeterViewId(selectedEntity.id);
+  }
 
   useKey((event) => {
     const active = document.activeElement as HTMLElement | null;
@@ -122,43 +120,33 @@ export default function App() {
     const isField = Boolean(active && (active.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"));
     if (isField) return;
 
-    if (event.key.toLowerCase() === "r" && selectedEntity) {
-      event.preventDefault();
-      setEntities((current) =>
-        current.map((entity) =>
-          entity.id === selectedEntity.id ? { ...entity, rotation: ((entity.rotation || 0) + 90) % 360 } : entity,
-        ),
-      );
-    }
-
-    if (
-      event.key === "Enter" &&
-      selectedEntity &&
-      (selectedEntity.type === ENTITY_TYPE.VMETER || selectedEntity.type === ENTITY_TYPE.AMETER)
-    ) {
-      setMeterViewId(selectedEntity.id);
-    }
-
-    if (event.key.toLowerCase() === "p" && analysis === ANALYSIS.AC) {
-      event.preventDefault();
-      setPhasorOpen((value) => !value);
-    }
-
-    if (event.key === "Escape" && meterViewId) setMeterViewId(null);
-
-    if (event.key !== "Delete" && event.key !== "Backspace") return;
-    if (selected.kind === "entity" && selected.id) {
-      const id = selected.id;
-      setEntities((current) => current.filter((entity) => entity.id !== id));
-      setWires((current) => current.filter((wire) => !wire.aTerm.startsWith(`${id}:`) && !wire.bTerm.startsWith(`${id}:`)));
-      setSelected({ kind: null, id: null });
-      return;
-    }
-
-    if (selected.kind === "wire" && selected.id) {
-      const id = selected.id;
-      setWires((current) => current.filter((wire) => wire.id !== id));
-      setSelected({ kind: null, id: null });
+    switch (event.key.toLowerCase()) {
+      case "r":
+        if (!selectedEntity) break;
+        event.preventDefault();
+        rotateSelectedEntity();
+        break;
+      case "enter":
+        openSelectedMeter();
+        break;
+      case "p":
+        if (analysis !== ANALYSIS.AC) break;
+        event.preventDefault();
+        setPhasorOpen((value) => !value);
+        break;
+      case "escape":
+        setMeterViewId(null);
+        setProbedNode(null);
+        setPendingWire(null);
+        break;
+      case "delete":
+      case "backspace":
+        if (selected.kind === "entity" && selected.id) {
+          deleteEntity(selected.id);
+        } else if (selected.kind === "wire" && selected.id) {
+          deleteWire(selected.id);
+        }
+        break;
     }
   });
 
@@ -178,29 +166,47 @@ export default function App() {
 
     const point = getMouse(svg, event);
 
-    if (tool !== TOOL.WIRE) {
-      if (tool !== TOOL.SELECT) addEntity(tool as EntityType, point.x, point.y);
-      else setSelected({ kind: null, id: null });
-      return;
-    }
-
-    if (hoverTerm) {
-      if (!pendingWire) {
-        setPendingWire({ aTerm: hoverTerm.id });
-      } else if (hoverTerm.id !== pendingWire.aTerm) {
-        const exists = wires.some(
-          (wire) =>
-            (wire.aTerm === pendingWire.aTerm && wire.bTerm === hoverTerm.id) ||
-            (wire.bTerm === pendingWire.aTerm && wire.aTerm === hoverTerm.id),
-        );
-        if (!exists) setWires((current) => current.concat({ id: niceId(), aTerm: pendingWire.aTerm, bTerm: hoverTerm.id }));
-        setPendingWire(null);
+    if (tool === TOOL.PROBE) {
+      if (hoverTerm) {
+        const nodeId = sol.nodeOf.get(hoverTerm.id);
+        if (nodeId !== undefined) setProbedNode(nodeId);
       }
       return;
     }
 
+    if (tool !== TOOL.SELECT && tool !== TOOL.WIRE) {
+      addEntity(tool as EntityType, point.x, point.y);
+      return;
+    }
+
+    if (tool === TOOL.SELECT) {
+      setSelected({ kind: null, id: null });
+      return;
+    }
+
+    if (!hoverTerm) {
+      setPendingWire(null);
+      setSelected({ kind: null, id: null });
+      return;
+    }
+
+    if (!pendingWire) {
+      setPendingWire({ aTerm: hoverTerm.id });
+      return;
+    }
+
+    if (hoverTerm.id === pendingWire.aTerm) return;
+
+    const wireAlreadyExists = wires.some(
+      (wire) =>
+        (wire.aTerm === pendingWire.aTerm && wire.bTerm === hoverTerm.id) ||
+        (wire.bTerm === pendingWire.aTerm && wire.aTerm === hoverTerm.id),
+    );
+
+    if (!wireAlreadyExists) {
+      setWires((current) => current.concat({ id: niceId(), aTerm: pendingWire.aTerm, bTerm: hoverTerm.id }));
+    }
     setPendingWire(null);
-    setSelected({ kind: null, id: null });
   }
 
   function onMouseMove(event: React.MouseEvent<SVGSVGElement>) {
@@ -264,16 +270,6 @@ export default function App() {
   const currentPhasors = useMemo(() => collectCurrentPhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
 
   const meterEntity = meterViewId ? entities.find((entity) => entity.id === meterViewId) || null : null;
-  const meterIsVoltage = meterEntity?.type === ENTITY_TYPE.VMETER;
-  const meterVoltagePhasor = meterEntity ? getVoltagePhasor(meterEntity, sol, analysis) : null;
-  const meterCurrentPhasor = meterEntity ? getCurrentPhasor(meterEntity, sol, analysis) : null;
-  const meterInstant = meterEntity
-    ? meterIsVoltage
-      ? getVoltageInstant(meterEntity, sol, analysis, t)
-      : getCurrentInstant(meterEntity, sol, analysis, t)
-    : null;
-  const meterMeta = getMagnitudeAndAngle(meterIsVoltage ? meterVoltagePhasor : meterCurrentPhasor);
-
   const omegaText = analysis === ANALYSIS.AC && sol.ok ? `omega = ${ac.omega.toFixed(2)} rad/s` : null;
 
   return (
@@ -287,7 +283,7 @@ export default function App() {
           acFreq={acFreq}
           setAcFreq={setAcFreq}
           running={running}
-          setRunning={setRunning}
+          onToggleRunning={toggleRunning}
           setPhasorOpen={setPhasorOpen}
           showNodes={showNodes}
           setShowNodes={setShowNodes}
@@ -303,12 +299,11 @@ export default function App() {
             entities={entities}
             wires={wires}
             selected={selected}
+            analysis={analysis}
             termIndex={termIndex}
             tool={tool}
             pendingWire={pendingWire}
             hoverTerm={hoverTerm}
-            running={running}
-            t={t}
             showNodes={showNodes}
             sol={sol}
             onCanvasClick={onCanvasClick}
@@ -323,21 +318,13 @@ export default function App() {
               setTool(TOOL.SELECT);
               if (entity.type === ENTITY_TYPE.VMETER || entity.type === ENTITY_TYPE.AMETER) setMeterViewId(entity.id);
             }}
-            getEntityCurrent={(entity) => (running ? getCurrentInstant(entity, sol, analysis, t) : null)}
-            getEntityVoltage={(entity) => (running ? getVoltageInstant(entity, sol, analysis, t) : null)}
           />
 
           {meterEntity && (
             <MeterModal
               entity={meterEntity}
               analysis={analysis}
-              ok={sol.ok}
-              reason={sol.ok ? undefined : sol.reason}
-              instant={meterInstant}
-              voltagePhasor={meterVoltagePhasor}
-              currentPhasor={meterCurrentPhasor}
-              angle={meterMeta.angle}
-              trace={trace}
+              sol={sol}
               onClose={() => setMeterViewId(null)}
             />
           )}
@@ -352,6 +339,15 @@ export default function App() {
             setPhasorMode={setPhasorMode}
             onClose={() => setPhasorOpen(false)}
           />
+
+          {probedNode !== null && (
+            <ProbeModal
+              nodeId={probedNode}
+              analysis={analysis}
+              sol={sol}
+              onClose={() => setProbedNode(null)}
+            />
+          )}
 
           <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs text-white/70">
             <div>
