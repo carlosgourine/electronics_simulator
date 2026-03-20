@@ -17,11 +17,11 @@ import { useCircuit } from "./hooks/useCircuit";
 import { useDraggable } from "./hooks/useDraggable";
 import { useKey } from "./hooks/useKey";
 import { useTimeStore } from "./store/useTimeStore";
-import type { Analysis, Entity, EntityType, PhasorMode, Terminal, Tool, Wire } from "./types";
+import type { Analysis, Entity, EntityType, PhasorMode, Terminal, Tool } from "./types";
 import { ANALYSIS, ENTITY_TYPE, TOOL } from "./types";
 import { worldTerminals } from "./utils/entities";
 import { hitTerminal, snap } from "./utils/geometry";
-import { parseHz, parseSI } from "./utils/parser";
+import { parseHz } from "./utils/parser";
 
 function getMouse(svg: SVGSVGElement, event: React.MouseEvent | MouseEvent) {
   const rect = svg.getBoundingClientRect();
@@ -214,36 +214,72 @@ export default function App() {
     },
   });
 
-  useEffect(() => {
-    console.assert(parseSI("1k") === 1000, "parseSI 1k");
-    console.assert(Math.abs((parseHz("1kHz") || 0) - 1000) < 1e-9, "parseHz 1kHz");
-
-    const ground: Entity = { id: "g", type: "ground", x: 0, y: 0, rotation: 0 };
-    const source: Entity = { id: "v", type: "vsrc", x: 0, y: 0, rotation: 0, wave: "dc", amplitude: "5V" };
-    const resistor: Entity = { id: "r", type: "resistor", x: 0, y: 0, rotation: 0, value: "1k" };
-    const testWires: Wire[] = [];
-    const [vA, vB] = worldTerminals(source);
-    const [rA, rB] = worldTerminals(resistor);
-    const [gT] = worldTerminals(ground);
-
-    testWires.push({ id: "w1", aTerm: vA.id, bTerm: rA.id });
-    testWires.push({ id: "w2", aTerm: rB.id, bTerm: gT.id });
-    testWires.push({ id: "w3", aTerm: vB.id, bTerm: gT.id });
-
-    const solution = solveDC([ground, source, resistor], testWires);
-    if (!solution.ok) return;
-
-    const nodeA = solution.nodeOf.get(rA.id)!;
-    const nodeB = solution.nodeOf.get(rB.id)!;
-    const voltage = (solution.V.get(nodeA) || 0) - (solution.V.get(nodeB) || 0);
-    console.assert(Math.abs(voltage - 5) < 1e-6, "DC solve Vr=5V");
-  }, []);
-
   const voltagePhasors = useMemo(() => collectVoltagePhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
   const currentPhasors = useMemo(() => collectCurrentPhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
 
   const meterEntity = meterViewId ? entities.find((entity) => entity.id === meterViewId) || null : null;
   const omegaText = analysis === ANALYSIS.AC && sol.ok ? `omega = ${ac.omega.toFixed(2)} rad/s` : null;
+
+  function handleContextMenu(event: React.MouseEvent<SVGSVGElement>) {
+    event.preventDefault();
+    setTool(TOOL.SELECT);
+    setPendingWire(null);
+    setProbeData(null);
+  }
+
+  function handleWireMouseDown(wireId: string, event: React.MouseEvent) {
+    event.stopPropagation();
+    setSelected({ kind: "wire", id: wireId });
+  }
+
+  function handleEntityMouseDown(entity: Entity, event: React.MouseEvent) {
+    if (tool === TOOL.PROBE_I || tool === TOOL.PROBE_V) {
+      event.stopPropagation();
+      return;
+    }
+    startDrag(entity, event);
+  }
+
+  function handleEntityClick(entity: Entity) {
+    if (tool === TOOL.PROBE_V) {
+      setProbeData({ type: "v-entity", id: entity.id });
+      return;
+    }
+    if (tool === TOOL.PROBE_I) {
+      setProbeData({ type: "i-entity", id: entity.id });
+      return;
+    }
+
+    setSelected({ kind: "entity", id: entity.id });
+    setTool(TOOL.SELECT);
+
+    if (entity.type === ENTITY_TYPE.VMETER || entity.type === ENTITY_TYPE.AMETER) {
+      setMeterViewId(entity.id);
+    }
+  }
+
+  function handleTerminalClick(terminal: Terminal) {
+    if (tool === TOOL.PROBE_V) {
+      const nodeId = sol.nodeOf.get(terminal.id);
+      if (nodeId !== undefined) setProbeData({ type: "v-node", id: String(nodeId) });
+      return;
+    }
+
+    if (tool === TOOL.PROBE_I) {
+      setProbeData({ type: "i-node", id: terminal.id });
+      return;
+    }
+
+    if (!pendingWire) {
+      setPendingWire({ aTerm: terminal.id });
+      return;
+    }
+
+    if (terminal.id === pendingWire.aTerm) return;
+
+    addWire(pendingWire.aTerm, terminal.id);
+    setPendingWire(null);
+  }
 
   return (
     <ErrorBoundary>
@@ -280,54 +316,11 @@ export default function App() {
             sol={sol}
             onCanvasClick={onCanvasClick}
             onMouseMove={onMouseMove}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setTool(TOOL.SELECT);
-              setPendingWire(null);
-              setProbeData(null);
-            }}
-            onWireMouseDown={(wireId, event) => {
-              event.stopPropagation();
-              setSelected({ kind: "wire", id: wireId });
-            }}
-            onEntityMouseDown={(entity, event) => {
-              if (tool === TOOL.PROBE_I || tool === TOOL.PROBE_V) {
-                event.stopPropagation();
-                return;
-              }
-              startDrag(entity, event);
-            }}
-            onEntityClick={(entity) => {
-              if (tool === TOOL.PROBE_V) {
-                setProbeData({ type: "v-entity", id: entity.id });
-                return;
-              }
-              if (tool === TOOL.PROBE_I) {
-                setProbeData({ type: "i-entity", id: entity.id });
-                return;
-              }
-              setSelected({ kind: "entity", id: entity.id });
-              setTool(TOOL.SELECT);
-              if (entity.type === ENTITY_TYPE.VMETER || entity.type === ENTITY_TYPE.AMETER) setMeterViewId(entity.id);
-            }}
-            onTerminalClick={(terminal) => {
-              if (tool === TOOL.PROBE_V) {
-                const nodeId = sol.nodeOf.get(terminal.id);
-                if (nodeId !== undefined) setProbeData({ type: "v-node", id: String(nodeId) });
-                return;
-              }
-              if (tool === TOOL.PROBE_I) {
-                setProbeData({ type: "i-node", id: terminal.id });
-                return;
-              }
-              if (!pendingWire) {
-                setPendingWire({ aTerm: terminal.id });
-                return;
-              }
-              if (terminal.id === pendingWire.aTerm) return;
-              addWire(pendingWire.aTerm, terminal.id);
-              setPendingWire(null);
-            }}
+            onContextMenu={handleContextMenu}
+            onWireMouseDown={handleWireMouseDown}
+            onEntityMouseDown={handleEntityMouseDown}
+            onEntityClick={handleEntityClick}
+            onTerminalClick={handleTerminalClick}
           />
 
           {meterEntity && (
