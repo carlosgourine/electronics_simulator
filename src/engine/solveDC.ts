@@ -12,6 +12,7 @@ const MIN_RESISTANCE = 1e-6;
  * Inductors are modeled as 0 V sources so their branch current remains measurable.
  */
 export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
+  // Step 1: collapse connected terminals into electrical nodes.
   const nodeOf = buildNodeMap(entities, wires, false);
   const hasGround = entities.some((entity) => entity.type === "ground");
   const nodes = Array.from(new Set(nodeOf.values())).sort((a, b) => a - b);
@@ -101,6 +102,7 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
   }
 
   for (const entity of entities) {
+    // Step 2: stamp each component into the MNA matrices according to its DC behavior.
     if (entity.type === "resistor") {
       const terminals = worldTerminals(entity);
       const resistance = parseSI(entity.value || "1k");
@@ -165,6 +167,7 @@ export function solveDC(entities: Entity[], wires: Wire[]): DCSolution {
   nonGroundNodes.forEach((node, index) => V.set(node, solution[index]));
   V.set(0, 0);
 
+  // Step 3: expose both node voltages and source-branch currents to the UI layer.
   return {
     ok: true,
     nodeOf,

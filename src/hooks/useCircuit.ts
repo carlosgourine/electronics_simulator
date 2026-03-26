@@ -9,6 +9,7 @@ export function useCircuit() {
   const [selected, setSelected] = useState<Selection>({ kind: null, id: null });
 
   function addEntity(type: EntityType, x: number, y: number) {
+    // New parts are created with sensible defaults, snapped to grid, then nudged to the nearest free slot.
     const entity = createEntity(type, entities, x, y);
     setEntities((current) => current.concat({ ...entity, ...nearestFree(entity.x, entity.y, current) }));
   }
@@ -22,6 +23,7 @@ export function useCircuit() {
   }
 
   function snapEntityToGrid(entityId: string) {
+    // Snapping happens after drag end so free movement feels responsive while placement stays aligned.
     setEntities((current) =>
       current.map((entity) =>
         entity.id === entityId ? { ...entity, ...nearestFree(entity.x, entity.y, current, entityId) } : entity,
@@ -33,6 +35,7 @@ export function useCircuit() {
     if (aTerm === bTerm) return;
 
     setWires((current) => {
+      // Wires are undirected for connectivity, so A-B and B-A are the same logical edge.
       const exists = current.some(
         (wire) => (wire.aTerm === aTerm && wire.bTerm === bTerm) || (wire.bTerm === aTerm && wire.aTerm === bTerm),
       );

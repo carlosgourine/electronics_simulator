@@ -14,6 +14,7 @@ const MIN_INDUCTANCE = 1e-9;
  * DC current sources open out and DC voltage sources become 0 V constraints.
  */
 export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number): ACSolution {
+  // AC analysis is steady-state only, so every AC source must agree on a single frequency.
   const acSources = entities.filter(
     (entity) => (entity.type === "vsrc" || entity.type === "isrc") && entity.wave === "ac",
   );
@@ -53,6 +54,7 @@ export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number
   }
 
   const omega = 2 * Math.PI * frequency;
+  // As in DC mode, we first turn the drawing into electrical nodes and then stamp an MNA system.
   const nodeOf = buildNodeMap(entities, wires, false);
   const hasGround = entities.some((entity) => entity.type === "ground");
   const nodes = Array.from(new Set(nodeOf.values())).sort((a, b) => a - b);
@@ -127,6 +129,7 @@ export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number
     const n1 = termNode.get(terminals[0]?.id || "");
     const n2 = termNode.get(terminals[1]?.id || "");
 
+    // Passive parts become complex admittances in the phasor domain.
     if (entity.type === "resistor") {
       const resistance = Math.max(parseSI(entity.value || "1k") || 0, MIN_RESISTANCE);
       stampAdmittance(n1, n2, C0(1 / resistance, 0));
@@ -200,6 +203,7 @@ export function solveAC(entities: Entity[], wires: Wire[], freqDefaultHz: number
   nonGroundNodes.forEach((node, index) => V.set(node, solution[index]));
   V.set(0, C0(0, 0));
 
+  // The UI reads node phasors plus voltage-source branch currents from this result.
   return {
     ok: true,
     nodeOf,

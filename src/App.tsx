@@ -52,6 +52,7 @@ export default function App() {
 
   const selectedEntity = entities.find((entity) => selected.kind === "entity" && entity.id === selected.id) || null;
 
+  // Build a fast lookup of all visible terminals so the canvas can hit-test wires and probe targets.
   const terminalMap = useMemo(() => {
     const map = new Map<string, Terminal>();
     entities.forEach((entity) => {
@@ -65,6 +66,7 @@ export default function App() {
   const sol = analysis === ANALYSIS.DC ? dc : ac;
 
   useEffect(() => {
+    // Time only advances while "Run" is enabled. Charts and instantaneous AC probe values read from this store.
     if (!running) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -141,6 +143,7 @@ export default function App() {
     const point = getMousePosition(svg, event);
 
     if (tool === TOOL.PROBE_V) {
+      // Voltage probes resolve to either a node ID or a component-level measurement target.
       if (hoverTerm) {
         const nodeId = sol.nodeOf.get(hoverTerm.id);
         if (nodeId !== undefined) setProbeData({ type: "v-node", id: String(nodeId) });
@@ -157,6 +160,7 @@ export default function App() {
     }
 
     if (hoverTerm) {
+      // A two-click interaction builds wires terminal-to-terminal.
       if (!pendingWire) {
         setPendingWire({ aTerm: hoverTerm.id });
       } else if (hoverTerm.id !== pendingWire.aTerm) {
@@ -195,6 +199,7 @@ export default function App() {
     },
   });
 
+  // These collections are derived views of the active AC solution for the phasor modal.
   const voltagePhasors = useMemo(() => collectVoltagePhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
   const currentPhasors = useMemo(() => collectCurrentPhasors(entities, ac, phasorMode), [ac, entities, phasorMode]);
   const omegaText = analysis === ANALYSIS.AC && sol.ok ? `omega = ${ac.omega.toFixed(2)} rad/s` : null;

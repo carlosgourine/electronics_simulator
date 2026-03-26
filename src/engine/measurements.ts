@@ -112,6 +112,7 @@ export function getCurrentInstant(entity: Entity, solution: Solution, analysis: 
 }
 
 export function getProbeValue(probeData: ProbeData, solution: Solution, entities: Entity[], analysis: Analysis, t = 0) {
+  // This is the main adapter from solver output to probe UI: it returns both an instantaneous value and its phasor.
   if (!solution.ok) return { value: 0, phasor: C0(0, 0), entity: null };
 
   if (probeData.type === "v-node") {
